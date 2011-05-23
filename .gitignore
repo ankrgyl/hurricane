@@ -1,0 +1,17 @@
+*.o
+*.a
+*.swp
+*~
+*.out
+*.out*
+*.ignore
+.DS_STORE
+*.log
+*.aux
+*_pb2.py
+*DS_Store*
+*META-INF*
+*.zip
+*.class
+*bin
+*.svn
