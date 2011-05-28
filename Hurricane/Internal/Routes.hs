@@ -42,10 +42,11 @@ data InvalidRoutes = TooManyParams T.Text T.Text
                    | EmptyRoute 
                    | DuplicateParamName T.Text
                      deriving (Show, Typeable)
-
 instance Exception InvalidRoutes
 
 buildRouteTree :: [(B.ByteString, h)] -> RouteTree h
+matchRoute :: [T.Text] -> (RouteTree h) -> ([(T.Text, T.Text)], Maybe h)
+
 
 buildRouteTree routes =
   foldr (\(routeString, h) -> \t -> addRoute (HTTP.decodePathSegments routeString, h) "" t)
@@ -112,7 +113,6 @@ extractParam s | s == "" = Nothing
 extractParam s | T.head s == ':' = Just (T.tail s)
 extractParam s = Nothing
 
-matchRoute :: [T.Text] -> (RouteTree h) -> ([(T.Text, T.Text)], Maybe h)
 matchRoute [] t = ([], handler t)
 matchRoute (r : l) t =
   case (HM.lookup r (subtrees t)) of 
