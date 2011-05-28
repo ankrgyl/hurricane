@@ -7,7 +7,9 @@ import qualified Data.ByteString as B
 import qualified Hurricane.Internal.Routes as R
 import qualified Network.HTTP.Types as HTTP
 
-data TestResult = Pass | Fail T.Text
+import qualified Data.Map as M
+
+data TestResult = Pass | Fail String
                   deriving (Show, Eq)
 
 trivialRoutes = [
@@ -15,26 +17,79 @@ trivialRoutes = [
   ("/b/c", "2"),
   ("/d/e/f", "3")]
 
-trivialTests = ("Trivial Tests", 
-  [("/a", [], Just "1"),
-   ("/b/c", [], Just "2"),
-   ("/d/e/f", [], Just "3")] 
+trivialTests = 
+  ("Trivial Tests", 
+    [
+      ("/a", [], Just "1"),
+      ("/b/c", [], Just "2"),
+      ("/d/e/f", [], Just "3"),
+      ("foo", [], Nothing),
+      ("/a/", [], Nothing),
+      ("/a/b", [], Nothing),
+      ("/b/k", [], Nothing)
+    ]
   )
+
+trivialParamRoutes = 
+  [
+    ("/a/:par", "1"),
+    ("/a/:foo/bar", "2")
+  ]
+
+trivialParamTests = 
+  ("Trivial Param Test",
+    [
+      ("/a/1", [("par", "1")], Just "1"),
+      ("/a/1/bar", [("foo", "1")], Just "2")
+    ]
+  )
+
+multParamRoutes =
+  [
+    ("/a/:b/c/:d", "1")
+  ]
+multParamTests =
+  ("Multiple Param Tests",
+    [
+      ("/a/b/c/d", [("b", "b"), ("d", "d")], Just "1")
+    ]
+  )
+
+overlappingParamRoutes =
+  [
+    ("/a/:k/foo/bar", "1"),
+    ("/a/:k/foo/baz", "2")
+  ]
+overlappingParamTests =
+  ("Overlapping Param Tests",
+    [
+      ("/a/one/foo/bar", [("k", "one")], Just "1"),
+      ("/a/two/foo/baz", [("k", "two")], Just "2")
+    ]
+  )
+
+main = do
+  runTestSuite trivialRoutes trivialTests
+  runTestSuite trivialParamRoutes trivialParamTests
+  runTestSuite multParamRoutes multParamTests
+  return ()
 
 
 testRoutes routes tests = iter tests 
   where 
     tree = R.buildRouteTree routes
     iter [] = Pass
-    iter ((url, vars, handler) : testList)
-      | R.matchRoute (HTTP.decodePathSegments url) tree == (vars, handler) = iter testList
-      | otherwise = Fail (E.decodeUtf8 url)
+    iter ((url, vars, handler) : testList) =
+      let 
+        (vars', handler') = R.matchRoute (HTTP.decodePathSegments url) tree
+      in
+        if (M.fromList vars, handler) == (M.fromList vars', handler')
+          then iter testList
+          else Fail ((show url) ++ "\t" ++ (show vars') ++ "\t" ++ (show handler') ++ "\n" ++ (show tree))
 
 runTestSuite routes (name, tests) =
   case testRoutes routes tests of
     Pass -> putStrLn (name ++ " Passed!")
-    Fail e -> putStrLn (name ++ " Failed with " ++ (show e))
+    Fail e -> putStrLn (name ++ " Failed with " ++ e)
 
-main = do
-  runTestSuite trivialRoutes trivialTests
-  return ()
+

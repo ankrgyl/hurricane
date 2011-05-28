@@ -2,6 +2,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
+{--
+  - Implementation of routing for Hurricane. Routes are of the form:
+  -
+  - Route ::= FixedString | ParamString | '/'
+  - FixedString ::= (Char \ ':') (Char)*
+  - ParamString ::= ':' (Char)*
+ --}
+
 module Hurricane.Internal.Routes 
 (
   RouteTree,
@@ -93,28 +101,26 @@ addRoute (r : l, h) pre t =
     Just p ->
       -- Otherwise, make sure it doesn't conflict with *any* param routes, and
       -- then add it to the appropriate subtree
-      case (HM.lookup p (params t)) of 
-        (Just _) -> throw (DuplicateParamName p)
-        Nothing ->
-          --Try and match against every existing param route to make sure no duplicates.
-          let 
-            dupRoute = HM.foldWithKey
-                          (\p' -> \t' -> \dup -> case matchRoute l t' of
-                                                  (_, Nothing) -> dup
-                                                  (_, Just h) -> Just (p, p'))
-                          Nothing
-                          (params t)
-            subtree = case HM.lookup r (params t) of
-                         Nothing -> addRoute (l, h) r emptyRouteTree
-                         (Just t') -> addRoute (l, h) r t'
-          in
-            case dupRoute of 
-              (Just (d1, d2)) -> throw (TooManyParams d1 d2)
-              Nothing -> RouteNode {
-                          subtrees = subtrees t,
-                          params = HM.insert p subtree (params t),
-                          handler = handler t
-                        }
+      let 
+        --Try and match against every existing param route to make sure no duplicates.
+        dupRoute = HM.foldWithKey
+                      (\p' -> \t' -> \dup -> case matchRoute l t' of
+                                              (_, Nothing) -> dup
+                                              (_, Just h) -> Just (p, p'))
+                      Nothing
+                      (params t)
+
+        subtree = case HM.lookup p (params t) of
+                     Nothing -> addRoute (l, h) r emptyRouteTree
+                     (Just t') -> addRoute (l, h) r t'
+      in
+        case dupRoute of 
+          (Just (d1, d2)) -> throw (TooManyParams d1 d2)
+          Nothing -> RouteNode {
+                      subtrees = subtrees t,
+                      params = HM.insert p subtree (params t),
+                      handler = handler t
+                    }
 
 {-- Given a piece of a route, figures out whether or not it represents a param, and if so
  -- extracts the name of the param.
@@ -139,4 +145,4 @@ matchRoute (r : l) t =
         iter ((p, t') : pl) =
           case matchRoute l t' of
             (_, Nothing) -> iter pl
-            (pmap, Just h) -> Just ((r, p) : pmap, Just h)
+            (pmap, Just h) -> Just ((p, r) : pmap, Just h)
