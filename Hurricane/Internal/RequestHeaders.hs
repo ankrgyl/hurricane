@@ -4,6 +4,9 @@ module Hurricane.Internal.RequestHeaders
 ) where
 
 import qualified Data.ByteString as B
+import qualified Network.HTTP.Types as H
+
+
 {-- Headers that we don't actively used are just
  -- ByteStrings for now --}
 data RequestHeaders = RequestHeaders {
@@ -38,3 +41,5 @@ data RequestHeaders = RequestHeaders {
   via :: Maybe B.ByteString,
   warning :: Maybe B.ByteString
 }
+
+parseHeaders :: H.RequestHeaders
