@@ -23,42 +23,52 @@ import qualified Network.HTTP.Types as HTTP
 
 import qualified Hurricane.Internal.Util as U
 
-{-- Each leaf of a RouteTree has an identifier, a mapping from next piece to subtree,
- -- and potentially a (last resort) parameter, with its own subtree.
+{-- We traverse a route tree by "consuming" individual components of a route, and
+ -- landing from RouteNode to RouteNode. Each node contains fix-named subtrees,
+ -- parameter subtrees, and potentially a handler.
  --
- -- This is redundant by design. Specifically, this uses heavy data structures, but the
- -- number of routes is generally small, and doesn't change with load. But, it needs to
- -- route very quickly because this is done on every request.
+ -- This tree is "heavy" by design. We need to route requests really fast, and
+ -- the number of routes is generally trivially small.
  --}
 data RouteTree h = RouteNode {
-                    subtrees :: (HM.Map T.Text (RouteTree h)), -- name -> tree
-                    params :: (HM.Map T.Text (RouteTree h)), -- param -> tree
-                    handler :: (Maybe h)
+                    subtrees :: HM.Map T.Text (RouteTree h), -- name -> tree
+                    params :: HM.Map T.Text (RouteTree h), -- param -> tree
+                    handler :: Maybe h
                    } deriving (Show)
+
 emptyRouteTree = RouteNode { subtrees = HM.empty, params = HM.empty, handler = Nothing }
 
 data InvalidRoutes = TooManyParams T.Text T.Text
                    | PrefixOverlap T.Text
-                   | EmptyRoute 
                    | DuplicateParamName T.Text
                      deriving (Show, Typeable)
 instance Exception InvalidRoutes
 
+{-- Converts a [(<Route String>, <Handler>)] to a Route Tree 
+ --
+ -- buildRouteTree [(<Route String>, <Handler>)] -> <Route Tree>
+ --}
 buildRouteTree :: [(B.ByteString, h)] -> RouteTree h
-matchRoute :: [T.Text] -> (RouteTree h) -> ([(T.Text, T.Text)], Maybe h)
 
+{-- Matches a parsed route against a route tree, returning an association
+ -- list of matched parameters and a handler if one exists.
+ --
+ -- matchRoute <Parsed Route> -> <Route Tree> -> [(<Param Assoc List>, <Val>), <Handler>]
+ --}
+matchRoute :: [T.Text] -> (RouteTree h) -> ([(T.Text, T.Text)], Maybe h)
 
 buildRouteTree routes =
   foldr (\(routeString, h) -> \t -> addRoute (HTTP.decodePathSegments routeString, h) "" t)
         emptyRouteTree
         routes
 
--- addRoute takes a pre-split route (<Text Route>) like ["path", "to", "url"] and handler
--- for this route (<handler>), which it builds into the passed in RouteTree <Current Tree>.
--- For debugging, i.e. the exceptions it throws, we also pass around the piece of the route
--- that we just consumed (<Previous Prefix>).
---
--- addRoute (<Text Route>, <handler>) <Previous Prefix> <Current Tree> -> <New Tree>
+{-- addRoute takes a pre-split route (<Text Route>) like ["path", "to", "url"] and handler
+ -- for this route (<handler>), which it builds into the passed in RouteTree <Current Tree>.
+ -- For debugging, i.e. the exceptions it throws, we also pass around the piece of the route
+ -- that we just consumed (<Previous Prefix>).
+ --
+ -- addRoute (<Text Route>, <handler>) <Previous Prefix> <Current Tree> -> <New Tree>
+ --}
 addRoute :: ([T.Text], h) -> T.Text -> (RouteTree h) -> (RouteTree h)
 
 addRoute ([], h) pre t =
@@ -106,8 +116,11 @@ addRoute (r : l, h) pre t =
                           handler = handler t
                         }
 
--- Given a piece of a route, figures out whether or not it represents a param, and if so
--- extracts the name of the param.
+{-- Given a piece of a route, figures out whether or not it represents a param, and if so
+ -- extracts the name of the param.
+ --
+ -- extractParam <Component> -> <Param>
+ --}
 extractParam :: T.Text -> Maybe T.Text 
 extractParam s | s == "" = Nothing
 extractParam s | T.head s == ':' = Just (T.tail s)
