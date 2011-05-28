@@ -72,6 +72,7 @@ main = do
   runTestSuite trivialRoutes trivialTests
   runTestSuite trivialParamRoutes trivialParamTests
   runTestSuite multParamRoutes multParamTests
+  runTestSuite overlappingParamRoutes overlappingParamTests
   return ()
 
 
