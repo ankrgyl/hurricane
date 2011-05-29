@@ -2,6 +2,7 @@
 
 module Hurricane.Internal.Util (
   Fail(..),
+  unimplemented,
   intToByteString
 ) where
 
@@ -15,6 +16,7 @@ import qualified Data.Text.Encoding as E
 data Fail = Fail String
             deriving (Show, Typeable)
 instance Exception Fail
+unimplemented = Fail "unimplemented"
 
 intToByteString :: Int -> B.ByteString
 intToByteString n = E.encodeUtf8 $ T.pack $ show $ n
