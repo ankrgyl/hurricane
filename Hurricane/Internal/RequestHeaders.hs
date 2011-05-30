@@ -36,7 +36,6 @@ module Hurricane.Internal.RequestHeaders
 ) where
 
 import qualified Data.Text as T
-import qualified Network.HTTP.Types as H
 
 {-- Headers that we don't actively used are just
  -- ByteStrings for now --}
