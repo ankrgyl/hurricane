@@ -20,7 +20,14 @@ data ApplicationOptions = ApplicationOptions {
                           }
 
 -- XXX Temporary
-type Handler = B.ByteString -> B.ByteString
+type HandlerMethod = B.ByteString -> B.ByteString
+type Handler = {
+      headMethod :: Maybe HandlerMethod
+      getMethod :: Maybe HandlerMethod
+      postMethod :: Maybe HandlerMethod
+      deleteMethod :: Maybe HandlerMethod
+      putMethod :: Maybe HandlerMethod
+    }
 
 data HandlerWrapper = Static | Dynamic Handler
 
@@ -31,4 +38,3 @@ installRoutes opt handlers =
     withStatic = (TE.encodeUtf8 $ static_url_prefix opt, Static) : handlers'
   in 
     R.buildRouteTree withStatic
-    

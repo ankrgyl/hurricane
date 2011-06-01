@@ -2,7 +2,7 @@
 module Hurricane.StaticHandler
 (
   staticHandler
-) where
+ where
 
 import qualified Network.Wai as Wai
 import qualified Data.ByteString as B
@@ -14,6 +14,7 @@ import System.IO (FilePath)
 
 import Hurricane.Internal.Util (unimplemented)
 
+{-- <File Path> is the path to the file to serve. --}
 staticHandler :: FilePath -> Iteratee B.ByteString IO Wai.Response
 staticHandler path = return $ Wai.ResponseFile
                   HTTP.status200
