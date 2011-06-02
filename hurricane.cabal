@@ -1,16 +1,17 @@
 Name:           Hurricane
-Version:        0.0.0
-Cabal-Version:  >= 1.10
-License:	BSD3
-License-File:	LICENSE
-Author:		Dean Herington
-Homepage:	http://hunit.sourceforge.net/
-Category:	Testing
-Synopsis:	A unit testing framework for Haskell
+Version:        0.0
+Cabal-Version:  >= 1.2
+License:	OtherLicense
+Author:		Ankur Goyal
+Maintainer:     ankrgyl@gmail.com
+Homepage:	http://www.github.com/ankrgyl/hurricane
+Synopsis:	A Tornado inspired Warp powered web framework
+Category:	Web
+Build-Type:     Simple
+
 
 Library
-  Build-Depends:	base
+  Build-Depends:	base, warp >= 0.4.0, wai >= 0.4.0, wai-app-static >= 0.2.0, http-types >= 0.6.4, 
+                        text >= 0.11.0.6, bytestring >= 0.9.1.10, hashmap >= 1.2.0.0, enumerator >= 0.4.10
   Exposed-modules:
-    Test.HUnit.Base, Test.HUnit.Lang, Test.HUnit.Terminal,
-    Test.HUnit.Text, Test.HUnit
-  Extensions:	CPP
+    Hurricane.Web

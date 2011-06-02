@@ -35,13 +35,13 @@ data ApplicationOptions = ApplicationOptions {
 
 -- XXX Temporary
 type HandlerMethod = B.ByteString -> B.ByteString
-type Handler = {
-      headMethod :: Maybe HandlerMethod
-      getMethod :: Maybe HandlerMethod
-      postMethod :: Maybe HandlerMethod
-      deleteMethod :: Maybe HandlerMethod
-      putMethod :: Maybe HandlerMethod
-    }
+data Handler = Handler {
+                 headMethod :: Maybe HandlerMethod,
+                 getMethod :: Maybe HandlerMethod,
+                 postMethod :: Maybe HandlerMethod,
+                 deleteMethod :: Maybe HandlerMethod,
+                 putMethod :: Maybe HandlerMethod
+               }
 
 data HandlerWrapper = Static | Dynamic Handler
 

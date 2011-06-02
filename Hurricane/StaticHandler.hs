@@ -16,7 +16,7 @@
 module Hurricane.StaticHandler
 (
   staticHandler
- where
+) where
 
 import qualified Network.Wai as Wai
 import qualified Data.ByteString as B
