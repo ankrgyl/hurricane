@@ -11,8 +11,16 @@ Build-Type:     Simple
 
 
 Library
-  Build-Depends:	base, warp >= 0.4.0, wai >= 0.4.0, wai-app-static >= 0.2.0, http-types >= 0.6.4, 
-                        text >= 0.11.0.6, bytestring >= 0.9.1.10, hashmap >= 1.2.0.0, enumerator >= 0.4.10
+  Build-Depends:	
+    base >= 4, 
+    warp >= 0.4.0, 
+    wai >= 0.4.0, 
+    wai-app-static >= 0.2.0, 
+    http-types >= 0.6.4, 
+    text >= 0.11.0.6, 
+    bytestring >= 0.9.1.10, 
+    hashmap >= 1.2.0.0, 
+    enumerator >= 0.4.10
   Exposed-modules:
     Hurricane.Web
 
