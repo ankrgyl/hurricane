@@ -15,3 +15,9 @@ Library
                         text >= 0.11.0.6, bytestring >= 0.9.1.10, hashmap >= 1.2.0.0, enumerator >= 0.4.10
   Exposed-modules:
     Hurricane.Web
+
+  ghc-options: -Wall
+
+source-repository head
+    type:       git
+    location:   git@github.com:ankrgyl/hurricane.git
