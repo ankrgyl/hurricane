@@ -82,11 +82,23 @@ overlappingParamTests =
     ]
   )
 
+staticTreeRoutes =
+  [
+    ("/static", "S")
+  ]
+staticTreeTests =
+  ("Static Tree Tests",
+    [
+      ("/static/folder/file.txt", [], Just "S")
+    ]
+  )
+
 main = do
   runTestSuite trivialRoutes trivialTests
   runTestSuite trivialParamRoutes trivialParamTests
   runTestSuite multParamRoutes multParamTests
   runTestSuite overlappingParamRoutes overlappingParamTests
+  runTestSuite staticTreeRoutes staticTreeTests
   return ()
 
 

@@ -52,7 +52,8 @@ import qualified Network.HTTP.Types as HTTP
 data RouteTree h = RouteNode {
                     subtrees :: HM.Map T.Text (RouteTree h), -- name -> tree
                     params :: HM.Map T.Text (RouteTree h), -- param -> tree
-                    handler :: Maybe h
+                    handler :: Maybe h,
+                    matchType :: MatchType,
                    } deriving (Show)
 
 emptyRouteTree :: forall a . RouteTree a
@@ -64,21 +65,31 @@ data InvalidRoutes = TooManyParams T.Text T.Text
                      deriving (Show, Typeable)
 instance Exception InvalidRoutes
 
+data MatchSpec = Full
+               | Prefix
+
+data MatchResult h = FullMatch h
+                   | PrefixMatch h [T.Text]
+                   | NoMatch
+
+
 {-- Converts a [(<Route String>, <Handler>)] to a Route Tree 
  --
  -- buildRouteTree [(<Route String>, <Handler>)] -> <Route Tree>
  --}
-buildRouteTree :: [(B.ByteString, h)] -> RouteTree h
+buildRouteTree :: [(B.ByteString, h, MatchType)] -> RouteTree h
 
 {-- Matches a parsed route against a route tree, returning an association
  -- list of matched parameters and a handler if one exists.
  --
  -- matchRoute <Parsed Route> -> <Route Tree> -> [(<Param Assoc List>, <Val>), <Handler>]
  --}
-matchRoute :: [T.Text] -> (RouteTree h) -> ([(T.Text, T.Text)], Maybe h)
+matchRoute :: [T.Text] -> (RouteTree h) -> ([(T.Text, T.Text)], Maybe h, [T.Text])
+
+
 
 buildRouteTree routes =
-  foldr (\(routeString, h) -> \t -> addRoute (HTTP.decodePathSegments routeString, h) "" t)
+  foldr (\(routeString, h, matchType) -> \t -> addRoute (HTTP.decodePathSegments routeString, h, matchType) "" t)
         emptyRouteTree
         routes
 
@@ -89,26 +100,34 @@ buildRouteTree routes =
  --
  -- addRoute (<Text Route>, <handler>) <Previous Prefix> <Current Tree> -> <New Tree>
  --}
-addRoute :: ([T.Text], h) -> T.Text -> (RouteTree h) -> (RouteTree h)
+addRoute :: ([T.Text], h, matchType) -> T.Text -> (RouteTree h) -> (RouteTree h)
 
-addRoute ([], h) pre t =
+addRoute ([], h, mt) pre t =
   -- Make sure that a handler doesn't already exist for this route
-  case (handler t) of
-    Nothing -> RouteNode { subtrees = subtrees t, params = params t, handler = Just h }
+  case (handler t, matchType t, mt) of
+    (Nothing, FullMatch, FullMatch) -> RouteNode { subtrees = subtrees t, params = params t, handler = Just h, matchType = mt }
+    (Nothing, FullMatch, PrefixMatch) ->
+      case HM.size (subtrees 
+
+
+
+
+    Nothing -> RouteNode { subtrees = subtrees t, params = params t, handler = Just h, matchType = mt }
     (Just _) -> throw (PrefixOverlap pre)
 
-addRoute (r : l, h) _ t =
+addRoute (r : l, h, mt) _ t =
   case extractParam r of
     -- If it's not a param, then merge it with the appropriate subtree
     Nothing -> 
       let subtree = case HM.lookup r (subtrees t) of 
-                      Nothing -> addRoute (l, h) r emptyRouteTree
-                      (Just t') -> addRoute (l, h) r t'
+                      Nothing -> addRoute (l, h, mt) r emptyRouteTree
+                      (Just t') -> addRoute (l, h, mt) r t'
       in
         RouteNode {
           subtrees = HM.insert r subtree (subtrees t), 
           params = params t,
-          handler = handler t
+          handler = handler t,
+          matchType =   
         }
     Just p ->
       -- Otherwise, make sure it doesn't conflict with *any* param routes, and
@@ -117,14 +136,14 @@ addRoute (r : l, h) _ t =
         --Try and match against every existing param route to make sure no duplicates.
         dupRoute = HM.foldWithKey
                       (\p' -> \t' -> \dup -> case matchRoute l t' of
-                                              (_, Nothing) -> dup -- This subtree doesn't contain t'
-                                              (_, Just _) -> Just (p, p')) -- Found a handler corresponding to this subtree!
+                                              (_, Nothing, _) -> dup -- This subtree doesn't contain t'
+                                              (_, Just _, _) -> Just (p, p')) -- Found a handler corresponding to this subtree!
                       Nothing
                       (params t)
 
         subtree = case HM.lookup p (params t) of
-                     Nothing -> addRoute (l, h) r emptyRouteTree
-                     (Just t') -> addRoute (l, h) r t'
+                     Nothing -> addRoute (l, h, mt) r emptyRouteTree
+                     (Just t') -> addRoute (l, h, mt) r t'
       in
         case dupRoute of 
           (Just (d1, d2)) -> throw (TooManyParams d1 d2)
