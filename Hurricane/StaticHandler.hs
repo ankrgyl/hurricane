@@ -18,19 +18,32 @@ module Hurricane.StaticHandler
   staticHandler
 ) where
 
+import Data.ByteString as B
+import qualified Data.Text as T
+
+import Control.Monad.Trans (liftIO)
+import Data.Enumerator (Iteratee)
+import Blaze.ByteString.Builder (fromByteString)
+
 import qualified Network.Wai as Wai
-import qualified Data.ByteString as B
 import qualified Network.HTTP.Types as HTTP
+import qualified Network.Wai.Application.Static as S
+
+import qualified Hurricane.Web as Web
 
 import Control.Exception (throw)
-import Data.Enumerator (Iteratee)
-import System.IO (FilePath)
-
 import Hurricane.Internal.Util (unimplemented)
 
-{-- <File Path> is the path to the file to serve. --}
-staticHandler :: FilePath -> Iteratee B.ByteString IO Wai.Response
-staticHandler path = return $ Wai.ResponseFile
-                  HTTP.status200
-                  [("Content-Type", "text/plain")]
-                  path Nothing
+type FinalResponse = Iteratee B.ByteString IO Wai.Response
+
+staticHandler :: Web.ApplicationOptions -> Wai.Request -> FinalResponse
+staticHandler = throw unimplemented
+
+{-- staticHandler_get <Application Options> <Request> <Include Body> -> <Response> --}
+staticHandler_get :: Web.ApplicationOptions -> Wai.Request -> Bool -> FinalResponse
+
+staticHandler_get opt req includeBody = liftIO $ do
+  return $ Wai.ResponseBuilder
+    HTTP.status200
+    []
+    $ fromByteString "TO BE IMPLEMENTED"

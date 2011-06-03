@@ -39,11 +39,8 @@ import qualified Data.Text as T
 import qualified Data.ByteString as B
 
 import qualified Data.HashMap as HM
-import qualified Data.HashSet as HS
 
 import qualified Network.HTTP.Types as HTTP
-
-import qualified Hurricane.Internal.Util as U
 
 {-- We traverse a route tree by "consuming" individual components of a route, and
  -- landing from RouteNode to RouteNode. Each node contains fix-named subtrees,
@@ -58,6 +55,7 @@ data RouteTree h = RouteNode {
                     handler :: Maybe h
                    } deriving (Show)
 
+emptyRouteTree :: forall a . RouteTree a
 emptyRouteTree = RouteNode { subtrees = HM.empty, params = HM.empty, handler = Nothing }
 
 data InvalidRoutes = TooManyParams T.Text T.Text
@@ -97,9 +95,9 @@ addRoute ([], h) pre t =
   -- Make sure that a handler doesn't already exist for this route
   case (handler t) of
     Nothing -> RouteNode { subtrees = subtrees t, params = params t, handler = Just h }
-    (Just h') -> throw (PrefixOverlap pre)
+    (Just _) -> throw (PrefixOverlap pre)
 
-addRoute (r : l, h) pre t =
+addRoute (r : l, h) _ t =
   case extractParam r of
     -- If it's not a param, then merge it with the appropriate subtree
     Nothing -> 
@@ -119,8 +117,8 @@ addRoute (r : l, h) pre t =
         --Try and match against every existing param route to make sure no duplicates.
         dupRoute = HM.foldWithKey
                       (\p' -> \t' -> \dup -> case matchRoute l t' of
-                                              (_, Nothing) -> dup
-                                              (_, Just h) -> Just (p, p'))
+                                              (_, Nothing) -> dup -- This subtree doesn't contain t'
+                                              (_, Just _) -> Just (p, p')) -- Found a handler corresponding to this subtree!
                       Nothing
                       (params t)
 
@@ -142,9 +140,10 @@ addRoute (r : l, h) pre t =
  -- extractParam <Component> -> <Param>
  --}
 extractParam :: T.Text -> Maybe T.Text 
-extractParam s | s == "" = Nothing
-extractParam s | T.head s == ':' = Just (T.tail s)
-extractParam s = Nothing
+extractParam s 
+  | s == "" = Nothing
+  | T.head s == ':' = Just (T.tail s)
+  | otherwise = Nothing
 
 matchRoute [] t = ([], handler t)
 matchRoute (r : l) t =

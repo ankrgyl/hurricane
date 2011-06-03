@@ -30,6 +30,8 @@ import qualified Data.Text.Encoding as E
 data Fail = Fail String
             deriving (Show, Typeable)
 instance Exception Fail
+
+unimplemented :: Fail
 unimplemented = Fail "unimplemented"
 
 intToByteString :: Int -> B.ByteString

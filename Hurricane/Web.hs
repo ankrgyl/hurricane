@@ -21,7 +21,6 @@ module Hurricane.Web
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import Hurricane.StaticHandler (staticHandler)
 
 import qualified Hurricane.Internal.Routes as R
 
@@ -35,6 +34,10 @@ data ApplicationOptions = ApplicationOptions {
 
 -- XXX Temporary
 type HandlerMethod = B.ByteString -> B.ByteString
+
+{-- A handler is a piece of data that responds to some subset of
+ -- HEAD, GET, POST, DELETE, and PUT requests. 
+ --}
 data Handler = Handler {
                  headMethod :: Maybe HandlerMethod,
                  getMethod :: Maybe HandlerMethod,
