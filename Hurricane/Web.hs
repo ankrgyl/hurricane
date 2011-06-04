@@ -48,7 +48,7 @@ data Handler = Handler {
 
 data HandlerWrapper = Static | Dynamic Handler
 
-installRoutes :: ApplicationOptions -> [(B.ByteString, Handler, R.MatchSpec)] -> R.RouteTree HandlerWrapper
+installRoutes :: ApplicationOptions -> [(B.ByteString, Handler, R.MatchSpec)] -> Either R.InvalidRoutes (R.RouteTree HandlerWrapper)
 installRoutes opt handlers =
   let 
     handlers' = [(s, Dynamic h, spec) | (s, h, spec) <- handlers]

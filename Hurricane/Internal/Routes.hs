@@ -16,17 +16,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
-{--
-  - Implementation of routing for Hurricane. Routes are of the form:
-  -
-  - Route ::= FixedString | ParamString | '/'
-  - FixedString ::= (Char \ ':') (Char)*
-  - ParamString ::= ':' (Char)*
- --}
+{-| 
+Implementation of routing for Hurricane. Routes are of the form:
+
+@
+Route ::= FixedString | ParamString | \'\/\'
+FixedString ::= (Char \\ \':\') (Char)\*
+ParamString ::= ':' (Char)\*
+@
+-}
 
 module Hurricane.Internal.Routes 
 (
   RouteTree,
+  emptyRouteTree,
   MatchSpec(..),
   MatchResult(..),
   InvalidRoutes(..),
@@ -45,30 +48,42 @@ import qualified Data.HashMap as HM
 
 import qualified Network.HTTP.Types as HTTP
 
-{-- We traverse a route tree by "consuming" individual components of a route, and
- -- landing from RouteNode to RouteNode. Each node contains fix-named subtrees,
- -- parameter subtrees, and potentially a handler.
- --
- -- This tree is "heavy" by design. We need to route requests really fast, and
- -- the number of routes is generally trivially small.
- --}
+{-| 
+We traverse a route tree by "consuming" individual components of a route, and
+landing from RouteNode to RouteNode. Each node contains fix-named subtrees,
+parameter subtrees, and a specification for the type of match it expects.
+-}
 data RouteTree h = RouteNode {
-                    subtrees :: HM.Map T.Text (RouteTree h), -- name -> tree
-                    params :: HM.Map T.Text (RouteTree h), -- param -> tree
-                    matchSpec :: CompiledSpec h
+                    subtrees :: HM.Map T.Text (RouteTree h), -- ^ Mapping from name -> tree
+                    params :: HM.Map T.Text (RouteTree h), -- ^ Mapping from param -> tree
+                    matchSpec :: CompiledSpec h -- ^ Compiled version of match specification
                    } deriving (Show)
 
+{-|
+Empty route tree
+-}
 emptyRouteTree :: forall a . RouteTree a
 emptyRouteTree = RouteNode { subtrees = HM.empty, params = HM.empty, matchSpec = CEmpty }
 
-data InvalidRoutes = TooManyParams T.Text T.Text
-                   | PrefixOverlap T.Text
-                   | DuplicateParamName T.Text
+{-|
+Various modes of failure in parsing routes.
+-}
+data InvalidRoutes = TooManyParams T.Text T.Text -- ^ Occurs when the specified parameter names 
+                                                 -- make it impossible to pick a specific route.
+                                                   
+                   | DuplicateParamName T.Text   -- ^ Occurs when two routes have the same parameter name.
+
+                   | PrefixOverlap T.Text        -- ^ Occurs when two prefixes overlap, as the current 
+                                                 -- implementation is not prefix-greedy. This may change
+                                                 -- in future versions.
                      deriving (Show, Typeable, Eq)
 instance Error InvalidRoutes
 
-data MatchSpec = Full
-               | Prefix
+{-|
+Specification for the kind of match required for a current route.
+-}
+data MatchSpec = Full   -- ^ Matches exactly the specified route
+               | Prefix -- ^ Matches any URL where the specified route is a prefix.
                deriving (Show)
 
 -- Not exposed at all
@@ -77,23 +92,30 @@ data CompiledSpec h = CEmpty
                     | CPrefix h
                     deriving (Show)
 
-data MatchResult h = FullMatch h
-                   | PrefixMatch h [T.Text]
-                   | FailMatch
+{-|
+Result of matching a URL to a Routing Tree. Match types correspond to MatchSpecs
+-}
+data MatchResult h = FullMatch h -- ^ Corresponds to a successful, full match,
+                                 -- and provides the corresponding handler.
+                   | PrefixMatch h [T.Text] -- ^ Corresponds to a succesful prefix match, and 
+                                            -- includes both the handler and unmatched suffix
+                   | FailMatch -- ^ Match failed
                    deriving (Show, Eq)
 
 
-{-- Converts a [(<Route String>, <Handler>)] to a Route Tree 
- --
- -- buildRouteTree [(<Route String>, <Handler>)] -> <Route Tree>
- --}
+{-| 
+Converts a routing specification into a Route Tree. Takes in a list of triples 
+of the form @(routeString, handler, matchSpec)@ and tries to return a @'RouteTree'@, otherwise
+an @'InvalidRoutes'@ on error.
+-}
 buildRouteTree :: [(B.ByteString, h, MatchSpec)] -> Either InvalidRoutes (RouteTree h)
 
-{-- Matches a parsed route against a route tree, returning an association
- -- list of matched parameters and a handler if one exists.
- --
- -- matchRoute <Parsed Route> -> <Route Tree> -> [(<Param Assoc List>, <Val>), <Handler>]
- --}
+{-| 
+Matches a parsed route against a route tree, returning an association
+list of matched parameters and a handler if one exists.
+
+Takes in a 'RouteTree' and a parsed route, and returns a pair of @(paramList, matchResult)@
+-}
 matchRoute :: (RouteTree h) -> [T.Text] -> ([(T.Text, T.Text)], MatchResult h)
 
 buildRouteTree routes =
