@@ -48,10 +48,10 @@ data Handler = Handler {
 
 data HandlerWrapper = Static | Dynamic Handler
 
-installRoutes :: ApplicationOptions -> [(B.ByteString, Handler)] -> R.RouteTree HandlerWrapper
+installRoutes :: ApplicationOptions -> [(B.ByteString, Handler, R.MatchSpec)] -> R.RouteTree HandlerWrapper
 installRoutes opt handlers =
   let 
-    handlers' = [(s, Dynamic h) | (s, h) <- handlers]
-    withStatic = (TE.encodeUtf8 $ static_url_prefix opt, Static) : handlers'
+    handlers' = [(s, Dynamic h, spec) | (s, h, spec) <- handlers]
+    withStatic = (TE.encodeUtf8 $ static_url_prefix opt, Static, R.Prefix) : handlers'
   in 
     R.buildRouteTree withStatic

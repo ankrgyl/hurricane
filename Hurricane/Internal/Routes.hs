@@ -27,12 +27,15 @@
 module Hurricane.Internal.Routes 
 (
   RouteTree,
+  MatchSpec(..),
+  MatchResult(..),
   InvalidRoutes,
   buildRouteTree,
   matchRoute,
 ) where
 
-import Control.Exception
+import Control.Monad.Error
+
 import Data.Typeable (Typeable)
 
 import qualified Data.Text as T
@@ -52,44 +55,49 @@ import qualified Network.HTTP.Types as HTTP
 data RouteTree h = RouteNode {
                     subtrees :: HM.Map T.Text (RouteTree h), -- name -> tree
                     params :: HM.Map T.Text (RouteTree h), -- param -> tree
-                    handler :: Maybe h,
-                    matchType :: MatchType,
+                    matchSpec :: CompiledSpec h
                    } deriving (Show)
 
 emptyRouteTree :: forall a . RouteTree a
-emptyRouteTree = RouteNode { subtrees = HM.empty, params = HM.empty, handler = Nothing }
+emptyRouteTree = RouteNode { subtrees = HM.empty, params = HM.empty, matchSpec = CEmpty }
 
 data InvalidRoutes = TooManyParams T.Text T.Text
                    | PrefixOverlap T.Text
                    | DuplicateParamName T.Text
                      deriving (Show, Typeable)
-instance Exception InvalidRoutes
+instance Error InvalidRoutes
 
 data MatchSpec = Full
                | Prefix
+               deriving (Show)
+
+-- Not exposed at all
+data CompiledSpec h = CEmpty
+                    | CFull h
+                    | CPrefix h
+                    deriving (Show)
 
 data MatchResult h = FullMatch h
                    | PrefixMatch h [T.Text]
-                   | NoMatch
+                   | FailMatch
+                   deriving (Show, Eq)
 
 
 {-- Converts a [(<Route String>, <Handler>)] to a Route Tree 
  --
  -- buildRouteTree [(<Route String>, <Handler>)] -> <Route Tree>
  --}
-buildRouteTree :: [(B.ByteString, h, MatchType)] -> RouteTree h
+buildRouteTree :: [(B.ByteString, h, MatchSpec)] -> Either InvalidRoutes (RouteTree h)
 
 {-- Matches a parsed route against a route tree, returning an association
  -- list of matched parameters and a handler if one exists.
  --
  -- matchRoute <Parsed Route> -> <Route Tree> -> [(<Param Assoc List>, <Val>), <Handler>]
  --}
-matchRoute :: [T.Text] -> (RouteTree h) -> ([(T.Text, T.Text)], Maybe h, [T.Text])
-
-
+matchRoute :: (RouteTree h) -> [T.Text] -> ([(T.Text, T.Text)], MatchResult h)
 
 buildRouteTree routes =
-  foldr (\(routeString, h, matchType) -> \t -> addRoute (HTTP.decodePathSegments routeString, h, matchType) "" t)
+  foldM (\t (routeString, h, spec) -> addRoute t (HTTP.decodePathSegments routeString, h, spec) "")
         emptyRouteTree
         routes
 
@@ -100,57 +108,54 @@ buildRouteTree routes =
  --
  -- addRoute (<Text Route>, <handler>) <Previous Prefix> <Current Tree> -> <New Tree>
  --}
-addRoute :: ([T.Text], h, matchType) -> T.Text -> (RouteTree h) -> (RouteTree h)
+addRoute :: (RouteTree h) -> ([T.Text], h, MatchSpec) -> T.Text -> Either InvalidRoutes (RouteTree h)
 
-addRoute ([], h, mt) pre t =
+addRoute t ([], h, spec) pre =
   -- Make sure that a handler doesn't already exist for this route
-  case (handler t, matchType t, mt) of
-    (Nothing, FullMatch, FullMatch) -> RouteNode { subtrees = subtrees t, params = params t, handler = Just h, matchType = mt }
-    (Nothing, FullMatch, PrefixMatch) ->
-      case HM.size (subtrees 
+  case (matchSpec t, spec) of
+    (CEmpty, Full) -> return (RouteNode { subtrees = subtrees t, params = params t, matchSpec = CFull h})
+    (CEmpty, Prefix) -> return (RouteNode { subtrees = subtrees t, params = params t, matchSpec = CPrefix h})
+    _ -> Left (PrefixOverlap pre)
 
-
-
-
-    Nothing -> RouteNode { subtrees = subtrees t, params = params t, handler = Just h, matchType = mt }
-    (Just _) -> throw (PrefixOverlap pre)
-
-addRoute (r : l, h, mt) _ t =
+addRoute t (r : l, h, mt) pre =
   case extractParam r of
     -- If it's not a param, then merge it with the appropriate subtree
-    Nothing -> 
-      let subtree = case HM.lookup r (subtrees t) of 
-                      Nothing -> addRoute (l, h, mt) r emptyRouteTree
-                      (Just t') -> addRoute (l, h, mt) r t'
-      in
-        RouteNode {
-          subtrees = HM.insert r subtree (subtrees t), 
-          params = params t,
-          handler = handler t,
-          matchType =   
-        }
+    Nothing -> do
+      t' <- case (matchSpec t) of 
+              CPrefix _ -> Left (PrefixOverlap pre)
+              _ -> return t
+      subtree <- case HM.lookup r (subtrees t') of 
+                  Nothing -> addRoute emptyRouteTree (l, h, mt) r
+                  (Just t'') -> addRoute t'' (l, h, mt) r
+      return RouteNode {
+               subtrees = HM.insert r subtree (subtrees t'), 
+               params = params t',
+               matchSpec = matchSpec t'
+             }
     Just p ->
       -- Otherwise, make sure it doesn't conflict with *any* param routes, and
       -- then add it to the appropriate subtree
       let 
         --Try and match against every existing param route to make sure no duplicates.
         dupRoute = HM.foldWithKey
-                      (\p' -> \t' -> \dup -> case matchRoute l t' of
-                                              (_, Nothing, _) -> dup -- This subtree doesn't contain t'
-                                              (_, Just _, _) -> Just (p, p')) -- Found a handler corresponding to this subtree!
+                      (\p' -> \t' -> \dup -> case matchRoute t' l of
+                                              (_, FailMatch) -> dup -- This subtree doesn't contain t'
+                                              (_, _) -> Just (p, p')) -- Found a handler corresponding to this subtree!
                       Nothing
                       (params t)
 
-        subtree = case HM.lookup p (params t) of
-                     Nothing -> addRoute (l, h, mt) r emptyRouteTree
-                     (Just t') -> addRoute (l, h, mt) r t'
       in
         case dupRoute of 
-          (Just (d1, d2)) -> throw (TooManyParams d1 d2)
-          Nothing -> RouteNode {
+          (Just (d1, d2)) -> Left (TooManyParams d1 d2)
+          Nothing -> do
+            subtree <- case HM.lookup p (params t) of
+                         Nothing -> addRoute emptyRouteTree (l, h, mt) r
+                         (Just t') -> addRoute t' (l, h, mt) r
+
+            return RouteNode {
                       subtrees = subtrees t,
                       params = HM.insert p subtree (params t),
-                      handler = handler t
+                      matchSpec = matchSpec t
                     }
 
 {-- Given a piece of a route, figures out whether or not it represents a param, and if so
@@ -164,17 +169,24 @@ extractParam s
   | T.head s == ':' = Just (T.tail s)
   | otherwise = Nothing
 
-matchRoute [] t = ([], handler t)
-matchRoute (r : l) t =
-  case (HM.lookup r (subtrees t)) of 
-    (Just t') -> matchRoute l t'
-    Nothing ->
-      case iter (HM.toList (params t)) of
-        Nothing -> ([], Nothing)
-        Just ans -> ans
-      where
-        iter [] = Nothing
-        iter ((p, t') : pl) =
-          case matchRoute l t' of
-            (_, Nothing) -> iter pl
-            (pmap, Just h) -> Just ((p, r) : pmap, Just h)
+matchRoute t [] = 
+  case matchSpec t of
+    CEmpty -> ([], FailMatch)
+    CFull h -> ([], FullMatch h)
+    CPrefix h -> ([], PrefixMatch h [])
+matchRoute t (r : l) =
+  case matchSpec t of
+    CPrefix h -> ([], PrefixMatch h (r : l))
+    _ ->
+      case (HM.lookup r (subtrees t)) of 
+        (Just t') -> matchRoute t' l
+        Nothing ->
+          case iter (HM.toList (params t)) of
+            Nothing -> ([], FailMatch)
+            Just ans -> ans
+          where
+            iter [] = Nothing
+            iter ((p, t') : pl) =
+              case matchRoute t' l of
+                (_, FailMatch) -> iter pl
+                (pmap, match) -> Just ((p, r) : pmap, match)
