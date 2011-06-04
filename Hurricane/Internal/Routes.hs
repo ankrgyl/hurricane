@@ -29,7 +29,7 @@ module Hurricane.Internal.Routes
   RouteTree,
   MatchSpec(..),
   MatchResult(..),
-  InvalidRoutes,
+  InvalidRoutes(..),
   buildRouteTree,
   matchRoute,
 ) where
@@ -64,7 +64,7 @@ emptyRouteTree = RouteNode { subtrees = HM.empty, params = HM.empty, matchSpec =
 data InvalidRoutes = TooManyParams T.Text T.Text
                    | PrefixOverlap T.Text
                    | DuplicateParamName T.Text
-                     deriving (Show, Typeable)
+                     deriving (Show, Typeable, Eq)
 instance Error InvalidRoutes
 
 data MatchSpec = Full

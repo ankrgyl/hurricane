@@ -25,13 +25,25 @@ import qualified Data.Map as M
 
 import Control.Monad.Error
 
+data BuildResult = BuildFail R.InvalidRoutes | BuildPass
+                   deriving (Show, Eq)
 data TestResult = Pass | Fail String
                   deriving (Show, Eq)
 
-trivialRoutes = [
-  ("/a", "1", R.Full),
-  ("/b/c", "2", R.Full),
-  ("/d/e/f", "3", R.Full)]
+
+emptyRoutes = ("Empty Routes", [], BuildPass)
+emptyTests = ("Empty Tests", [])
+
+trivialRoutes = 
+  ("Trivial Routes",
+    [
+      ("/a", "1", R.Full),
+      ("/b/c", "2", R.Full),
+      ("/d/e/f", "3", R.Full)
+    ],
+    BuildPass
+  )
+    
 
 trivialTests = 
   ("Trivial Tests", 
@@ -47,13 +59,16 @@ trivialTests =
   )
 
 trivialParamRoutes = 
-  [
-    ("/a/:par", "1", R.Full),
-    ("/a/:foo/bar", "2", R.Full)
-  ]
+  ("Trivial Param Routes",
+    [
+      ("/a/:par", "1", R.Full),
+      ("/a/:foo/bar", "2", R.Full)
+    ],
+    BuildPass
+  )
 
 trivialParamTests = 
-  ("Trivial Param Test",
+  ("Trivial Param Tests",
     [
       ("/a/1", [("par", "1")], R.FullMatch "1"),
       ("/a/1/bar", [("foo", "1")], R.FullMatch "2")
@@ -61,9 +76,12 @@ trivialParamTests =
   )
 
 multParamRoutes =
-  [
-    ("/a/:b/c/:d", "1", R.Full)
-  ]
+  ("Multiple Param Routes",
+    [
+      ("/a/:b/c/:d", "1", R.Full)
+    ],
+    BuildPass
+  )
 multParamTests =
   ("Multiple Param Tests",
     [
@@ -72,10 +90,13 @@ multParamTests =
   )
 
 overlappingParamRoutes =
-  [
-    ("/a/:k/foo/bar", "1", R.Full),
-    ("/a/:k/foo/baz", "2", R.Full)
-  ]
+  ("Overlapping Param Routes",
+    [
+      ("/a/:k/foo/bar", "1", R.Full),
+      ("/a/:k/foo/baz", "2", R.Full)
+    ],
+    BuildPass
+  )
 overlappingParamTests =
   ("Overlapping Param Tests",
     [
@@ -85,16 +106,55 @@ overlappingParamTests =
   )
 
 staticTreeRoutes =
-  [
-    ("/static", "S", R.Full),
-    ("/static/bar", "S", R.Prefix)
-  ]
+  ("Static Tree Routes",
+    [
+      ("/static", "S", R.Prefix),
+      ("/longer/static", "L", R.Prefix)
+    ],
+    BuildPass
+  )
 staticTreeTests =
   ("Static Tree Tests",
     [
-      ("/static/folder/file.txt", [], R.PrefixMatch "S" ["folder", "file.txt"])
+      ("/static/folder/file.txt", [], R.PrefixMatch "S" ["folder", "file.txt"]),
+      ("/longer/static/folder/file.txt", [], R.PrefixMatch "L" ["folder", "file.txt"])
     ]
   )
+
+prefixParamRoutes =
+  ("Prefix Param Routes",
+    [
+      ("/static", "S", R.Prefix),
+      ("/:param/static", "P", R.Prefix)
+    ],
+    BuildPass
+  )
+prefixParamTests =
+  ("Prefix Param Tests",
+    [
+      ("/static/folder/file.txt", [], R.PrefixMatch "S" ["folder", "file.txt"]),
+      ("/open/static/folder/file.txt", [("param", "open")], R.PrefixMatch "P" ["folder", "file.txt"])
+    ]
+  )
+
+conflictingParamRoutes =
+  ("Conflicting Param Routes",
+    [
+      ("/a/:p/b/c", "A", R.Full),
+      ("/a/:k/b/c", "B", R.Full)
+    ],
+    BuildFail (R.TooManyParams "k" "p")
+  )
+
+overlappingPrefixRoutes =
+  ("Overlapping Prefix Routes",
+    [
+      ("/a", "A", R.Prefix),
+      ("/a/b", "B", R.Prefix)
+    ],
+    BuildFail (R.PrefixOverlap "a")
+  )
+
 
 main = do
   runTestSuite trivialRoutes trivialTests
@@ -102,27 +162,41 @@ main = do
   runTestSuite multParamRoutes multParamTests
   runTestSuite overlappingParamRoutes overlappingParamTests
   runTestSuite staticTreeRoutes staticTreeTests
-  print $ R.buildRouteTree staticTreeRoutes
+  runTestSuite prefixParamRoutes prefixParamTests
+  runTestSuite conflictingParamRoutes emptyTests
+  runTestSuite overlappingParamRoutes emptyTests
   return ()
 
 
-testRoutes routes tests = 
+testRoutes (routeName, routes, buildResult) tests = 
   case R.buildRouteTree routes of
-    (Left e) -> Fail (show e)
-    (Right tree) -> iter tests
-      where 
-        iter [] = Pass
-        iter ((url, vars, handler) : testList) =
-          let 
-            (vars', handler') = R.matchRoute tree (HTTP.decodePathSegments url)
-          in
-            if (M.fromList vars, handler) == (M.fromList vars', handler')
-              then iter testList
-              else Fail ((show url) ++ "\t" ++ (show vars') ++ "\t" ++ (show handler') ++ "\n" ++ (show tree))
+    (Left e) ->
+      case buildResult of BuildPass -> Fail (show e)
+                          (BuildFail e') ->
+                            if e == e'
+                               then Pass
+                               else Fail (show e)
+    (Right tree) -> 
+      case buildResult of 
+        (BuildFail e) -> Fail ("build should have failed with " ++ (show e))
+        BuildPass ->
+          iter tests
+          where 
+            iter [] = Pass
+            iter ((url, vars, handler) : testList) =
+              let 
+                (vars', handler') = R.matchRoute tree (HTTP.decodePathSegments url)
+              in
+                if (M.fromList vars, handler) == (M.fromList vars', handler')
+                  then iter testList
+                  else Fail ((show url) ++ "\t" ++ (show vars') ++ "\t" ++ (show handler') ++ "\n" ++ (show tree))
 
+padToLength len str = (take (len - (length str)) (repeat ' ')) ++ str
+routesAndTestToString (name, _, _) testName = (padToLength 30 name) ++ "\t" ++ (padToLength 30 testName)
+    
 runTestSuite routes (name, tests) =
   case testRoutes routes tests of
-    Pass -> putStrLn (name ++ " Passed!")
-    Fail e -> putStrLn (name ++ " Failed with: " ++ e)
+    Pass -> putStrLn ((routesAndTestToString routes name) ++ "\t\t\tPassed!")
+    Fail e -> putStrLn ((routesAndTestToString routes name) ++ "\t\t\tFailed!\t\t" ++ e)
 
 
