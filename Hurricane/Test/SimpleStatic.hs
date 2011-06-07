@@ -17,8 +17,8 @@ import qualified Network.Wai.Handler.Warp as Warp
 import qualified Hurricane.Web as Web
 
 options = Web.ApplicationOptions {
-            static_url_prefix = "static",
-            static_path = "Hurricane"
+            Web.static_url_prefix = "static",
+            Web.static_path = "Hurricane"
           }
 
 routes = []

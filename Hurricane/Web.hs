@@ -47,6 +47,7 @@ data ApplicationOptions = ApplicationOptions {
                             -- File system path 
                             static_path :: T.Text 
                           }
+                          deriving (Show, Eq)
 
 
 -- XXX Temporary
