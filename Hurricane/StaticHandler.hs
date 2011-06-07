@@ -18,7 +18,7 @@ module Hurricane.StaticHandler
   staticHandler
 ) where
 
-import Data.ByteString as B
+import qualified Data.ByteString as B
 import qualified Data.Text as T
 
 import Control.Monad.Trans (liftIO)
@@ -31,19 +31,33 @@ import qualified Network.Wai.Application.Static as S
 
 import qualified Hurricane.Web as Web
 
-import Control.Exception (throw)
-import Hurricane.Internal.Util (unimplemented)
+--import Control.Exception (throw)
+--import Hurricane.Internal.Util (unimplemented)
 
-type FinalResponse = Iteratee B.ByteString IO Wai.Response
+import System.FilePath ((</>))
+--import System.Directory (doesFileExist)
 
-staticHandler :: Web.ApplicationOptions -> Wai.Request -> FinalResponse
-staticHandler = throw unimplemented
+
+staticHandler :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> Web.FinalResponse
+staticHandler opt req pieces = staticHandler_get opt req pieces True
 
 {-- staticHandler_get <Application Options> <Request> <Include Body> -> <Response> --}
-staticHandler_get :: Web.ApplicationOptions -> Wai.Request -> Bool -> FinalResponse
+staticHandler_get :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> Bool -> Web.FinalResponse
 
-staticHandler_get opt req includeBody = liftIO $ do
+staticHandler_get opt _ relPieces _ = liftIO $ do
+  let fullPath = pathFromPieces (Web.static_path opt) relPieces
+  putStrLn fullPath
+  return $ Wai.ResponseFile
+    HTTP.status200 [] fullPath Nothing
+
+
+{-- pathFromPieces <root> <pieces> --}
+pathFromPieces :: T.Text -> [T.Text] -> String
+pathFromPieces root pieces = foldl (</>) (T.unpack root) (map T.unpack pieces)
+
+{--
   return $ Wai.ResponseBuilder
     HTTP.status200
     []
     $ fromByteString "TO BE IMPLEMENTED"
+--}

@@ -22,7 +22,9 @@ Library
     hashmap >= 1.2.0.0, 
     enumerator >= 0.4.10,
     blaze-builder >= 0.3.0.0,
-    mtl >= 2.0.1.0
+    mtl >= 2.0.1.0,
+    filepath >= 1.2.0.0,
+    directory >= 1.1.0.0
 
   Exposed-modules:
     Hurricane.Web,
