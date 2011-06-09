@@ -28,7 +28,7 @@ Library
 
   Exposed-modules:
     Hurricane.Web,
-    Hurricane.StaticHandler
+    Hurricane.Application
 
   ghc-options: -Wall
 

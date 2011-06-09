@@ -16,10 +16,9 @@
 module Hurricane.Web
 (
   ApplicationOptions(..),
-  Handler,
-  RouteSpec,
-  FinalResponse,
-  makeApplication
+  Handler(..),
+  RouteSpec(..),
+  FinalResponse(..),
 ) where
 
 import Control.Monad.Error (Error(..))
@@ -35,23 +34,27 @@ import qualified Data.Enumerator.List as EL
 import Blaze.ByteString.Builder (fromByteString)
 
 import qualified Network.Wai as Wai
+import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.HTTP.Types as HTTP
 
 import qualified Hurricane.Internal.Routes as R
-import Hurricane.Internal.Util (unimplemented)
+import Hurricane.Internal.Util (unimplemented, Fail(..))
 
 data ApplicationOptions = ApplicationOptions {
                             -- URL Prefix corresponding to static traffic
                             static_url_prefix :: T.Text, 
 
                             -- File system path 
-                            static_path :: T.Text 
+                            static_path :: T.Text,
+
+                            port_num :: Int
                           }
                           deriving (Show, Eq)
 
 
 -- XXX Temporary
-type HandlerMethod = B.ByteString -> B.ByteString
+--type HandlerMethod = B.ByteString -> B.ByteString
+type HandlerMethod = ()
 
 type RouteSpec = [(B.ByteString, Handler, R.MatchSpec)]
 
@@ -66,33 +69,4 @@ data Handler = Handler {
                  postMethod :: Maybe HandlerMethod,
                  deleteMethod :: Maybe HandlerMethod,
                  putMethod :: Maybe HandlerMethod
-               }
-
-data HandlerWrapper = Static | Dynamic Handler
-
-installRoutes :: ApplicationOptions -> RouteSpec -> Either R.InvalidRoutes (R.RouteTree HandlerWrapper)
-installRoutes opt handlers =
-  let 
-    handlers' = [(s, Dynamic h, spec) | (s, h, spec) <- handlers]
-    withStatic = (TE.encodeUtf8 $ static_url_prefix opt, Static, R.Prefix) : handlers'
-  in 
-    R.buildRouteTree withStatic
-
-
-hurricaneWrapper :: ApplicationOptions -> (R.RouteTree HandlerWrapper) -> Wai.Request -> (IO Wai.Response)
-hurricaneWrapper opt routes request = do
-  let handler = R.matchRoute routes (Wai.pathInfo request)
-  putStrLn "hey, we made it!"
-  throw unimplemented
-  
-
-makeApplication :: ApplicationOptions -> RouteSpec -> Wai.Application
-makeApplication opt spec request = 
-  EL.consume >>= \rawBody ->
-  liftIO $ do
-    let body = TE.decodeUtf8 (B.concat rawBody)
-    let routeTree = case installRoutes opt spec of
-                      (Left _) -> throw unimplemented
-                      (Right tree) -> tree
-    handlerResponse <- hurricaneWrapper opt routeTree request
-    return $ handlerResponse
+               } deriving (Show)

@@ -14,15 +14,29 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 import qualified Network.Wai.Handler.Warp as Warp
+import qualified Hurricane.Internal.Routes as R
 import qualified Hurricane.Web as Web
+import qualified Hurricane.Application as App
+
+import qualified Data.ByteString as B
 
 options = Web.ApplicationOptions {
             Web.static_url_prefix = "static",
-            Web.static_path = "Hurricane"
+            Web.static_path = "Hurricane",
+            Web.port_num = 8000
           }
 
-routes = []
+emptyHandler = Web.Handler {
+                 Web.headMethod = Nothing,
+                 Web.getMethod = Nothing,
+                 Web.postMethod = Nothing,
+                 Web.deleteMethod  = Nothing,
+                 Web.putMethod = Nothing
+               }
 
-app = Web.makeApplication options routes
 
-main = Warp.run 3000 app
+routes = [
+    ("/staticky", emptyHandler, R.Prefix)
+  ]
+
+main = App.runApplication options routes

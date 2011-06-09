@@ -38,6 +38,7 @@ module Hurricane.Internal.Routes
 ) where
 
 import Control.Monad.Error
+import Control.Exception (Exception(..))
 
 import Data.Typeable (Typeable)
 
@@ -78,6 +79,7 @@ data InvalidRoutes = TooManyParams T.Text T.Text -- ^ Occurs when the specified 
                                                  -- in future versions.
                      deriving (Show, Typeable, Eq)
 instance Error InvalidRoutes
+instance Exception InvalidRoutes
 
 {-|
 Specification for the kind of match required for a current route.

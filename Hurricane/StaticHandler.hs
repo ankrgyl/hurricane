@@ -35,20 +35,23 @@ import qualified Hurricane.Web as Web
 --import Hurricane.Internal.Util (unimplemented)
 
 import System.FilePath ((</>))
---import System.Directory (doesFileExist)
+import System.Directory (doesFileExist)
 
 
-staticHandler :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> Web.FinalResponse
+staticHandler :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> IO Wai.Response
 staticHandler opt req pieces = staticHandler_get opt req pieces True
 
 {-- staticHandler_get <Application Options> <Request> <Include Body> -> <Response> --}
-staticHandler_get :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> Bool -> Web.FinalResponse
+staticHandler_get :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> Bool -> IO Wai.Response
 
-staticHandler_get opt _ relPieces _ = liftIO $ do
+staticHandler_get opt _ relPieces _ = do
   let fullPath = pathFromPieces (Web.static_path opt) relPieces
   putStrLn fullPath
-  return $ Wai.ResponseFile
-    HTTP.status200 [] fullPath Nothing
+  --side effects!
+  shouldServe <- doesFileExist fullPath 
+  return $ case shouldServe of
+    False -> Wai.ResponseBuilder HTTP.status404 [] (fromByteString "FAILURE")
+    True -> Wai.ResponseFile HTTP.status200 [] fullPath Nothing
 
 
 {-- pathFromPieces <root> <pieces> --}
