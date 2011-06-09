@@ -13,16 +13,19 @@
 -- limitations under the License.
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 module Hurricane.Web
 (
   ApplicationOptions(..),
   Handler(..),
   RouteSpec(..),
+  HandlerError(..),
+  HandlerResponse(..),
   FinalResponse(..),
 ) where
 
-import Control.Monad.Error (Error(..))
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Error (Error(..), ErrorT(..))
+import Control.Monad.Trans (MonadIO(..), liftIO)
 import Control.Exception (throw)
 
 import qualified Data.ByteString as B
@@ -51,6 +54,10 @@ data ApplicationOptions = ApplicationOptions {
                           }
                           deriving (Show, Eq)
 
+data HandlerError = HandlerError HTTP.Status deriving (Show, Eq)
+instance Error HandlerError
+type HandlerMonad = (ErrorT HandlerError IO) 
+type HandlerResponse = HandlerMonad Wai.Response
 
 -- XXX Temporary
 --type HandlerMethod = B.ByteString -> B.ByteString

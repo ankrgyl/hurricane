@@ -12,6 +12,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Hurricane.Application
 (
@@ -21,7 +22,7 @@ module Hurricane.Application
 import qualified Hurricane.Web as Web
 import Hurricane.StaticHandler (staticHandler)
 
-import Control.Monad.Error (Error(..))
+import Control.Monad.Error (Error(..), runErrorT)
 import Control.Monad.Trans (liftIO)
 import Control.Exception (throw)
 
@@ -67,7 +68,7 @@ hurricaneWrapper opt routes request =
   EL.consume >>= \rawBody ->
     liftIO $ do
       let (args, handler) = R.matchRoute routes (Wai.pathInfo request)
-      result :: Wai.Response <- 
+      result :: Either Web.HandlerError Wai.Response <- runErrorT $
         case handler of 
           R.FailMatch -> 
             throw $ Fail "no match found"
@@ -75,4 +76,6 @@ hurricaneWrapper opt routes request =
             staticHandler opt request suffix
           _ ->
             throw unimplemented
-      return result
+      return $ case result of
+                 Left (Web.HandlerError e) -> (Wai.ResponseBuilder HTTP.status404 [] (fromByteString "fail"))
+                 Right resp -> resp

@@ -18,10 +18,12 @@ module Hurricane.StaticHandler
   staticHandler
 ) where
 
+import Control.Monad.Trans (liftIO)
+import Control.Monad.Error
+
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 
-import Control.Monad.Trans (liftIO)
 import Data.Enumerator (Iteratee)
 import Blaze.ByteString.Builder (fromByteString)
 
@@ -38,29 +40,22 @@ import System.FilePath ((</>))
 import System.Directory (doesFileExist)
 
 
-staticHandler :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> IO Wai.Response
+staticHandler :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> Web.HandlerResponse
 staticHandler opt req pieces = staticHandler_get opt req pieces True
 
 {-- staticHandler_get <Application Options> <Request> <Include Body> -> <Response> --}
-staticHandler_get :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> Bool -> IO Wai.Response
+staticHandler_get :: Web.ApplicationOptions -> Wai.Request -> [T.Text] -> Bool -> Web.HandlerResponse
 
 staticHandler_get opt _ relPieces _ = do
   let fullPath = pathFromPieces (Web.static_path opt) relPieces
-  putStrLn fullPath
-  --side effects!
-  shouldServe <- doesFileExist fullPath 
-  return $ case shouldServe of
-    False -> Wai.ResponseBuilder HTTP.status404 [] (fromByteString "FAILURE")
-    True -> Wai.ResponseFile HTTP.status200 [] fullPath Nothing
-
+  shouldServe <- liftIO $ do putStrLn fullPath
+                             doesFileExist fullPath 
+  ans <- case shouldServe of
+          False -> throwError (Web.HandlerError HTTP.status404)
+          True -> return (Wai.ResponseFile HTTP.status200 [] fullPath Nothing)
+  liftIO $ putStrLn "still going"
+  return ans
 
 {-- pathFromPieces <root> <pieces> --}
 pathFromPieces :: T.Text -> [T.Text] -> String
 pathFromPieces root pieces = foldl (</>) (T.unpack root) (map T.unpack pieces)
-
-{--
-  return $ Wai.ResponseBuilder
-    HTTP.status200
-    []
-    $ fromByteString "TO BE IMPLEMENTED"
---}
