@@ -1,4 +1,5 @@
-##Hurricane
+Hurricane
+=========
 
 Hurricane, a [Tornado](http://www.tornadoweb.org) inspired Warp powered web framework written in Haskell.
 
